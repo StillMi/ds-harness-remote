@@ -258,30 +258,18 @@ export function resolveConfig(input: ConfigInput = {}, env: NodeJS.ProcessEnv = 
   }
 }
 
-const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]'])
-
-/** IPv4 hosts that are only reachable on loopback, a LAN, link-local, or CGNAT/VPN networks. */
-function isPrivateNetworkHostname(hostname: string): boolean {
-  if (LOCAL_HOSTS.has(hostname)) return true
-  const match = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(hostname)
-  if (match === null) return false
-  const octets = match.slice(1).map(Number)
-  if (octets.some(value => value > 255)) return false
-  const [a, b] = octets
-  return (
-    a === 10 ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) ||
-    (a === 169 && b === 254) ||
-    (a === 100 && b >= 64 && b <= 127)
-  )
-}
+// 鲸鲸改的（2026-11-06）：下面两个原本用来「http 只放行私网」，
+// 现在显式 http 一律放行，它们不再需要，一并删除以免 lint 报未使用。
 
 export function normalizeServerUrl(value: string): string {
   const url = new URL(value)
-  const privateHttp = url.protocol === 'http:' && isPrivateNetworkHostname(url.hostname)
-  if (url.protocol !== 'https:' && !privateHttp) {
-    throw new TypeError('serverUrl must use HTTPS (HTTP is allowed only for localhost or private-network addresses)')
+  // 鲸鲸改的（2026-11-06）：自建服务器常常只有「IP:端口」而且没证书。
+  // 上游原来要求 https，http 仅放行 loopback/私网，于是公网 IP + http 会在
+  // resolveConfig 抛 TypeError → apply 失败 → host 面不激活 → 控制路由未注册 →
+  // 界面永远显示「控制通道仍在启动」。改成：显式写明的 http 一律放行。
+  const allowPlainHttp = url.protocol === 'http:'
+  if (url.protocol !== 'https:' && !allowPlainHttp) {
+    throw new TypeError('serverUrl must use HTTPS or an explicit HTTP origin')
   }
   if (url.username !== '' || url.password !== '') {
     throw new TypeError('serverUrl must not contain credentials')

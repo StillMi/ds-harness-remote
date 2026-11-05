@@ -69,9 +69,10 @@ describe('plugin config', () => {
     })
   })
 
-  it('allows HTTP on private networks while rejecting insecure public servers and embedded credentials', () => {
-    expect(() => resolveConfig({ serverUrl: 'http://remote.example.com' })).toThrow(/HTTPS/)
-    expect(() => resolveConfig({ serverUrl: 'http://100.128.0.1:8080' })).toThrow(/HTTPS/)
+  // 鲸鲸改的：自建服务器可能只有公网 IP:端口、没有证书，所以显式 http 一律放行。
+  it('accepts explicit plain HTTP origins and rejects embedded credentials or non-origin URLs', () => {
+    expect(resolveConfig({ serverUrl: 'http://remote.example.com' }).serverUrl).toBe('http://remote.example.com')
+    expect(resolveConfig({ serverUrl: 'http://1.192.79.205:41873' }).serverUrl).toBe('http://1.192.79.205:41873')
     expect(() => resolveConfig({ serverUrl: 'https://user:password@remote.example.com' })).toThrow(/credentials/)
     expect(() => resolveConfig({ serverUrl: 'https://remote.example.com?token=secret' })).toThrow(/query parameters/)
     expect(() => resolveConfig({ serverUrl: 'https://remote.example.com/api' })).toThrow(/without a path/)
